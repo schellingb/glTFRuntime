@@ -2,6 +2,7 @@
 
 #include "glTFRuntimeParser.h"
 #include "StaticMeshDescription.h"
+#include "StaticMeshOperations.h"
 #include "PhysXCookHelper.h"
 #include "Interfaces/ITargetPlatformManagerModule.h"
 #include "Interfaces/ITargetPlatform.h"
@@ -28,11 +29,21 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FJsonObject>
 	TArray<uint32> CPUVertexInstancesIDs;
 
 	int32 NumUVs = 1;
+	bool bCalculateNormals = false;
+	bool bCalculateTangents = false;
 	for (FglTFRuntimePrimitive& Primitive : Primitives)
 	{
 		if (Primitive.UVs.Num() > NumUVs)
 		{
 			NumUVs = Primitive.UVs.Num();
+		}
+		if (Primitive.Normals.Num() == 0)
+		{
+			bCalculateNormals = true;
+		}
+		if (Primitive.Tangents.Num() == 0)
+		{
+			bCalculateTangents = true;
 		}
 	}
 
@@ -136,8 +147,8 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FJsonObject>
 					TriangleVerticesIDs[1] == TriangleVerticesIDs[2] ||
 					TriangleVerticesIDs[0] == TriangleVerticesIDs[2])
 				{
-					VertexInstancesIDs.Empty();
-					TriangleVerticesIDs.Empty();
+					VertexInstancesIDs.Reset();
+					TriangleVerticesIDs.Reset();
 					continue;
 				}
 
@@ -152,11 +163,20 @@ UStaticMesh* FglTFRuntimeParser::LoadStaticMesh_Internal(TSharedRef<FJsonObject>
 				{
 					return nullptr;
 				}
-				VertexInstancesIDs.Empty();
-				TriangleVerticesIDs.Empty();
+				VertexInstancesIDs.Reset();
+				TriangleVerticesIDs.Reset();
 			}
 		}
 
+	}
+
+	FStaticMeshOperations::ComputePolygonTangentsAndNormals(MeshDescription->GetMeshDescription());
+	if (bCalculateNormals || bCalculateTangents)
+	{
+		EComputeNTBsFlags flags = EComputeNTBsFlags::None;
+		if (bCalculateNormals)  flags |= EComputeNTBsFlags::Normals;
+		if (bCalculateTangents) flags |= EComputeNTBsFlags::Tangents;
+		FStaticMeshOperations::ComputeTangentsAndNormals(MeshDescription->GetMeshDescription(), flags);
 	}
 
 	if (StaticMeshConfig.PivotPosition != EglTFRuntimePivotPosition::Asset)
